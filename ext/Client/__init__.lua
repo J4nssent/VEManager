@@ -35,7 +35,6 @@ function VEManagerClient:RegisterVars()
 		DefaultEvening = require("Presets/DefaultEvening"),
 		Vanilla = require("Presets/Vanilla"),
 	}
-	self.m_vanillaPreset = nil
 end
 
 function VEManagerClient:RegisterEvents()
@@ -242,162 +241,24 @@ function VEManagerClient:GetRawPresets()
 	return self._RawPresets
 end
 
----@param p_Class string
----@param p_Field FieldInformation
-function VEManagerClient:GetDefaultValue(p_Class, p_Field)
-	if p_Field.typeInfo.enum then
-		if p_Field.typeInfo.name == "Realm" then
-			return Realm.Realm_Client
-		else
-			m_VEMLogger:Write("\t- Found unhandled enum, " .. p_Field.typeInfo.name)
-			return
-		end
-	end
-
-	local s_States = VisualEnvironmentManager:GetStates()
-
-	for i, l_State in ipairs(s_States) do
-		--m_VEMLogger:Write(">>>>>> state:" .. l_State.entityName)
-
-		if l_State.entityName == "Levels/Web_Loading/Lighting/Web_Loading_VE" then
-			goto continue
-		elseif l_State.entityName ~= 'EffectEntity' then
-			local s_Class = l_State[UtilityFunctions:FirstToLower(p_Class)] --colorCorrection
-
-			if s_Class == nil then
-				goto continue
-			end
-
-			--m_VEMLogger:Write("Sending default value: " .. tostring(p_Class) .. " | " .. tostring(p_Field.typeInfo.name) .. " | " .. tostring(s_Class[firstToLower(p_Field.typeInfo.name)]) .. " (" .. tostring(type(s_Class[firstToLower(p_Field.typeInfo.name)])) .. ")")
-			--m_VEMLogger:Write(tostring(s_Class[firstToLower(p_Field.name)]) .. ' | ' .. tostring(p_Field.typeInfo.name))
-			return s_Class[UtilityFunctions:FirstToLower(p_Field.name)] --colorCorrection Contrast
-		end
-
-		::continue::
-	end
-end
-
 function VEManagerClient:_LoadPresets()
-	m_VEMLogger:Write("Loading presets... (Name, Type, Priority)")
-
+	m_VEMLogger:Write("Loading presets...")
 
 	for _, l_State in ipairs(VisualEnvironmentManager:GetStates()) do
 		if l_State.entityName ~= "EffectEntity" and l_State.entityName ~= "Levels/Web_Loading/Lighting/Web_Loading_VE" then
 			-- SET VANILLA VE TO PRIORITY 0
 			l_State.priority = 0
 			l_State.visibility = 0
-			self.m_vanillaPreset = l_State
 		end
 	end
 
-	-- prepare presets
 	for l_ID, l_Preset in pairs(self._RawPresets) do
-		-- Create Object
+		-- Create custom VE object for each preset
 		local s_VEObject = VisualEnvironmentObject(l_Preset)
-
-		--Foreach class
-		local s_ComponentCount = 0
-
-		for _, l_Class in ipairs(s_VEObject.supportedClasses) do
-			if l_Preset[l_Class] ~= nil then
-				-- Create class and add it to the VE entity.
-				local s_Class = UtilityFunctions:InitEngineType(l_Class .. "ComponentData")
-				s_Class.excluded = false
-				s_Class.isEventConnectionTarget = 3
-				s_Class.isPropertyConnectionTarget = 3
-				s_Class.indexInBlueprint = s_ComponentCount
-				s_Class.transform = LinearTransform()
-
-				-- Foreach field in class
-				for _, l_Field in ipairs(s_Class.typeInfo.fields) do
-					-- Fix lua types
-					local s_FieldName = l_Field.name
-
-					if s_FieldName == "End" then
-						s_FieldName = "EndValue"
-					end
-
-					-- Get type
-					local s_Type = l_Field.typeInfo.name --Boolean, Int32, Vec3 etc.
-					-- pm_VEMLogger:Write("Field: " .. tostring(s_FieldName) .. " | " .. " Type: " .. tostring(s_Type))
-
-					-- Initialize value
-					local s_Value = nil
-
-					-- If the preset contains that field
-					if l_Preset[l_Class][s_FieldName] then
-						if UtilityFunctions:IsBasicType(s_Type) then
-							s_Value = UtilityFunctions:ParseValue(s_Type, l_Preset[l_Class][s_FieldName])
-						elseif l_Field.typeInfo.enum then
-							s_Value = tonumber(l_Preset[l_Class][s_FieldName])
-						elseif s_Type == "TextureAsset" then
-							s_Value = UtilityFunctions:GetTexture(l_Preset[l_Class][s_FieldName])
-							if not s_Value then
-								m_VEMLogger:Write("\t- TextureAsset has not been saved (" ..
-									l_Preset[l_Class][s_FieldName] ..
-									" | " .. tostring(l_Class) .. " | " .. tostring(s_FieldName) .. ")")
-							end
-						elseif l_Field.typeInfo.array then
-							error("\t- Found unexpected array") -- TODO: Instead of error (that breaks the code), a continue should be used (unfortunately with goto), or set an "errorFound" true/false parameter to true and skip the component addition
-							return
-						else
-							error("\t- Found unexpected DataContainer: " .. s_Type) -- TODO: Instead of error (that breaks the code), a continue should be used (unfortunately with goto), or set an "errorFound" true/false parameter to true and skip the component addition
-							return
-						end
-
-						-- Set value
-						if s_Value ~= nil then
-							s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = s_Value
-						end
-					end
-
-					-- If not in the preset or incorrect value
-					if s_Value == nil then
-						---@param p_Class string
-						---@param p_Field FieldInformation
-
-						-- Try to get original value
-						-- m_VEMLogger:Write("Setting default value for field " .. s_FieldName .. " of class " .. l_Class .. " | " ..tostring(s_Value))
-						s_Value = self:GetDefaultValue(l_Class, l_Field)
-
-						if s_Value == nil then
-							m_VEMLogger:Write("\t- Failed to fetch original value: " ..
-								tostring(l_Class) .. " | " .. tostring(s_FieldName))
-
-							if s_FieldName == "FilmGrain" then -- fix FilmGrain texture
-								m_VEMLogger:Write("\t\t- Fixing value for field " ..
-									s_FieldName .. " of class " .. l_Class .. " | " .. tostring(s_Value))
-								---@diagnostic disable-next-line: param-type-mismatch
-								s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = TextureAsset(ResourceManager
-									:FindInstanceByGuid(Guid('44AF771F-23D2-11E0-9C90-B6CDFDA832F1'),
-										Guid('1FD2F223-0137-2A0F-BC43-D974C2BD07B4')))
-							end
-						else
-							-- Applying original value
-							if UtilityFunctions:IsBasicType(s_Type) then
-								s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = s_Value
-							elseif l_Field.typeInfo.enum then
-								s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = tonumber(s_Value)
-							elseif s_Type == "TextureAsset" then
-								---@diagnostic disable-next-line: param-type-mismatch
-								s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = TextureAsset(s_Value)
-							elseif l_Field.typeInfo.array then
-								m_VEMLogger:Write("\t- Found unexpected array, ignoring")
-							else
-								-- Its a DataContainer
-								s_Class[UtilityFunctions:FirstToLower(s_FieldName)] = _G[s_Type](s_Value)
-							end
-						end
-					end
-				end
-				s_ComponentCount = s_ComponentCount + 1
-				s_VEObject.ve.components:add(s_Class)
-			end
-		end
-		s_VEObject.ve.runtimeComponentCount = s_ComponentCount
 		m_VisualEnvironmentHandler:RegisterVisualEnvironmentObject(l_ID, s_VEObject)
 		self._RawPresets[l_ID] = nil
 	end
+
 	-- Enabling Vanilla by default :)
 	self._OnEnablePreset(self, 'Vanilla')
 	Events:Dispatch("VEManager:PresetsLoaded")
