@@ -61,7 +61,6 @@ function VEManagerClient:RegisterEvents()
 	NetEvents:Subscribe('VEManager:EnablePreset', self, self._OnEnablePreset)
 end
 
---#region VU Event Functions
 
 ---@param p_LevelName string
 ---@param p_GameModeName string
@@ -99,8 +98,13 @@ end
 ---@param p_ID string
 ---@param p_Preset string
 function VEManagerClient:_RegisterPreset(p_ID, p_Preset)
-	self._RawPresets[p_ID] = json.decode(p_Preset)
-	m_VEMLogger:Write("Registered Preset: " .. p_ID)
+	local s_Preset = json.decode(p_Preset)
+	if s_Preset ~= nil then
+		self._RawPresets[p_ID] = s_Preset
+		m_VEMLogger:Write("Registered Preset: " .. p_ID)
+	else
+		m_VEMLogger:Write("Could not parse preset:  " .. p_ID)
+	end
 end
 
 ---@param p_ID string
@@ -261,10 +265,10 @@ function VEManagerClient:_LoadPresets()
 
 	-- Enabling Vanilla by default :)
 	self._OnEnablePreset(self, 'Vanilla')
+	m_VEMLogger:Write("Presets loaded")
 	Events:Dispatch("VEManager:PresetsLoaded")
 	NetEvents:Send("VEManager:PresetsLoaded")
 	NetEvents:Send("VEManager:PlayerReady")
-	m_VEMLogger:Write("Presets loaded")
 end
 
 return VEManagerClient()

@@ -39,8 +39,7 @@ local veComponentTypes = {
 
 ---@param p_Preset table
 function VisualEnvironmentObject:__init(p_Preset)
-	m_VEMLogger:Write("Init ...")
-	m_VEMLogger:WriteTable(p_Preset)
+	m_VEMLogger:Write("Initializing VE Object: " .. tostring(p_Preset.Name))
 
 	self.name = p_Preset.Name or ('unknown_preset_'
 		.. tostring(m_VisualEnvironmentHandler:GetTotalVEObjectCount()))
@@ -159,14 +158,14 @@ function VisualEnvironmentObject:_ParseField(p_ComponentType, p_FieldInfo, p_Fie
 
 	-- If no value was defined, return a value from the active states
 	-- This prevents default values from overriding the previous state,
-	-- since any defined component will fully override the previous states component
+	-- since any defined component will fully override the previous state's component
 	local s_FoundValue = self:_GetValueFromStates(p_ComponentType, p_FieldInfo)
 	if s_FoundValue ~= nil then
 		return s_FoundValue
 
-	else
-		m_VEMLogger:Write("\t- Could not find current value for " ..
-			tostring(p_ComponentType) .. " | " .. tostring(p_FieldName))
+	-- else
+	-- 	m_VEMLogger:Write("\t- Could not find current value for " ..
+	-- 		tostring(p_ComponentType) .. " | " .. tostring(p_FieldName))
 	end
 end
 
