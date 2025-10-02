@@ -1,7 +1,6 @@
 ---@class VisualEnvironmentObject
 ---@field ve VisualEnvironmentEntityData
 ---@field entity VisualEnvironmentEntity|Entity|nil
----@field supportedClasses table<string>
 ---@overload fun(arg: VisualEnvironmentObject): VisualEnvironmentObject
 ---@diagnostic disable-next-line: assign-type-mismatch
 VisualEnvironmentObject = class "VisualEnvironmentObject"
@@ -13,7 +12,7 @@ local m_VEMLogger = VEMLogger("VisualEnvironmentObject", true)
 local m_VisualEnvironmentHandler = require("VisualEnvironmentHandler")
 
 -- Supported types by VisualEnvironmentStates https://docs.veniceunleashed.net/vext/ref/client/type/visualenvironmentstate/
-local veComponentTypes = {
+local m_VEComponentTypes = {
 	"CameraParams",
 	"CharacterLighting",
 	"ColorCorrection",
@@ -52,7 +51,9 @@ function VisualEnvironmentObject:__init(p_Preset)
 	s_VE.enabled = true
 	s_VE.priority = self.priority
 	s_VE.visibility = 1
+
 	self.ve = s_VE
+	self.entity = nil
 
 	self:_CreateComponents()
 end
@@ -61,7 +62,7 @@ end
 function VisualEnvironmentObject:_CreateComponents()
 	local s_Count = 0
 
-	for _, l_Type in ipairs(veComponentTypes) do
+	for _, l_Type in ipairs(m_VEComponentTypes) do
 		local s_RawValue = self.rawPreset[l_Type]
 		if s_RawValue ~= nil then
 			-- Value is array-like, handle each element as a component
@@ -112,7 +113,8 @@ function VisualEnvironmentObject:_CreateComponent(p_RawComponent, p_Type, p_Coun
 		local s_ParsedValue = self:_ParseField(p_Type, l_FieldInfo, s_FieldName, s_RawValue)
 		if s_ParsedValue ~= nil then
 			s_Component[UtilityFunctions:FirstToLower(s_FieldName)] = s_ParsedValue
-		-- else
+		elseif s_RawValue ~= nil then
+			m_VEMLogger:Write("\t- Failed to parse value: " .. s_RawValue)
 			-- return nil here if the whole component should be ignored
 		end
 	end
@@ -139,6 +141,8 @@ function VisualEnvironmentObject:_ParseField(p_ComponentType, p_FieldInfo, p_Fie
 			local s_Texture = UtilityFunctions:GetTexture(p_RawValue)
 			if s_Texture ~= nil then
 				return s_Texture
+			elseif p_RawValue ~= 'nil' then
+				return nil	-- Allow VE's without a sky texture by defining 'nil'
 			else
 				m_VEMLogger:Write("\t- TextureAsset not found ("
 					.. p_RawValue .. " | " .. tostring(p_FieldName) .. ")")
@@ -169,20 +173,10 @@ function VisualEnvironmentObject:_ParseField(p_ComponentType, p_FieldInfo, p_Fie
 	end
 end
 
-
 ---@param p_ComponentType string
 ---@param p_FieldInfo FieldInformation
+---@description Return the first value of this field that is found in the active states
 function VisualEnvironmentObject:_GetValueFromStates(p_ComponentType, p_FieldInfo)
-	if p_FieldInfo.typeInfo.enum then
-		if p_FieldInfo.typeInfo.name == "Realm" then
-			return Realm.Realm_Client
-		else
-			m_VEMLogger:Write("\t- Found unhandled enum, " .. p_FieldInfo.typeInfo.name)
-			return 0
-		end
-	end
-
-	-- Return the first value of this field that is found in the active states
 	local s_States = VisualEnvironmentManager:GetStates()
 	for _, l_State in ipairs(s_States) do
 		if l_State.entityName ~= "Levels/Web_Loading/Lighting/Web_Loading_VE"
